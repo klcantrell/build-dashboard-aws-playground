@@ -15,7 +15,8 @@ import * as s3Deployment from "aws-cdk-lib/aws-s3-deployment";
 import * as cognito from "aws-cdk-lib/aws-cognito";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as lambda from "aws-cdk-lib/aws-lambda";
-import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
+import * as sqsEventSource from "aws-cdk-lib/aws-lambda-event-sources";
+import * as sns from "aws-cdk-lib/aws-sns";
 
 export class BuildDashboardStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
@@ -79,6 +80,9 @@ export class BuildDashboardStack extends Stack {
       queueName: "BuildStatusQueue",
       visibilityTimeout: Duration.seconds(60),
     });
+    const topic = new sns.Topic(this, 'BuildStatusTopic', {
+      displayName: 'BuildStatusTopic',
+    });
 
     const notificationLambda = new lambda.Function(this, "BuildNotificationFunction", {
       runtime: lambda.Runtime.NODEJS_18_X,
@@ -89,8 +93,9 @@ export class BuildDashboardStack extends Stack {
     });
 
     notificationLambda.addEventSource(
-      new SqsEventSource(queue, { batchSize: 10 })
+      new sqsEventSource.SqsEventSource(queue, { batchSize: 10 })
     );
+    topic.grantPublish(notificationLambda);
 
     new CfnOutput(this, "CloudFrontURL", {
       value: distribution.domainName,
@@ -126,6 +131,12 @@ export class BuildDashboardStack extends Stack {
       value: queue.queueUrl,
       description: "The queue URL",
       exportName: "BuildStatusQueueUrl",
+    });
+
+    new CfnOutput(this, "BuildStatusTopicArn", {
+      value: topic.topicArn,
+      description: "The arn of the notification topic",
+      exportName: "BuildStatusTopicArn",
     });
   }
 }
