@@ -1,4 +1,4 @@
-name: Builder Dashboard Tests
+name: Build Dashboard Tests
 
 on:
   workflow_dispatch:
@@ -18,3 +18,11 @@ jobs:
     steps:
     - name: Print the 'pass' input
       run: echo "pass or fail? ${{ inputs.pass }}"
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-region: us-east-2
+        role-to-assume: arn:aws:iam::108929348570:role/builder-dashboard-aws-playground-github-actions
+        role-session-name: BuildDashboardGitHubActions
+    - name: AWS list regions
+      run: aws account list-regions
