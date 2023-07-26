@@ -11,6 +11,10 @@ const messageCommand = new SendMessageCommand({
   MessageBody: JSON.stringify({ status: process.argv[2], timestamp: Date.now() }),
 });
 
-const response = await client.send(messageCommand);
+async function sendMessage(): Promise<void> {
+  const response = await client.send(messageCommand);
 
-console.log(JSON.stringify(response, null, 2));
+  console.log(JSON.stringify(response, null, 2));
+}
+
+sendMessage();

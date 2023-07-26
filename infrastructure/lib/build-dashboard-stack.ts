@@ -84,7 +84,7 @@ export class BuildDashboardStack extends Stack {
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: "index.handler",
       code: lambda.Code.fromAsset(
-        path.join(__dirname, "../../lambda", "notification")
+        path.join(__dirname, "lambda/notification")
       ),
     });
 

@@ -35,13 +35,13 @@ jobs:
       run: exit 1
     - name: Send failure status
       if: failure()
-      working-directory: queue
+      working-directory: infrastructure
       run: |
         npm ci
-        node sendMessage fail
+        node lib/queue/sendMessage fail
     - name: Send success status
       if: success()
-      working-directory: queue
+      working-directory: infrastructure
       run: |
         npm ci
-        node sendMessage pass
+        node lib/queue/sendMessage pass
