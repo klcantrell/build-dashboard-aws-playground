@@ -20,10 +20,10 @@ jobs:
       id-token: write
       contents: read
     steps:
+    - uses: actions/checkout@v3
     - name: Check 'pass' input
       if: inputs.pass == 'fail'
       run: exit 1
-    - uses: actions/checkout@v3
     - uses: actions/setup-node@v3
       with:
         node-version: 18
