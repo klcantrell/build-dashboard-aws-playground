@@ -1,17 +1,13 @@
 import path from "path";
 
-import {
-  CfnOutput,
-  RemovalPolicy,
-  Stack,
-  StackProps,
-  aws_cognito,
-} from "aws-cdk-lib";
+import { CfnOutput, Duration, RemovalPolicy, Stack, StackProps } from "aws-cdk-lib";
 import { Distribution, ViewerProtocolPolicy } from "aws-cdk-lib/aws-cloudfront";
 import { S3Origin } from "aws-cdk-lib/aws-cloudfront-origins";
 import { BlockPublicAccess, Bucket } from "aws-cdk-lib/aws-s3";
 import { BucketDeployment, Source } from "aws-cdk-lib/aws-s3-deployment";
+import { UserPool } from "aws-cdk-lib/aws-cognito";
 import { Construct } from "constructs";
+import { Queue } from "aws-cdk-lib/aws-sqs";
 
 export class InfrastructureStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
@@ -45,7 +41,7 @@ export class InfrastructureStack extends Stack {
       distributionPaths: ["/*"],
     });
 
-    const userPool = new aws_cognito.UserPool(this, "UserPool", {
+    const userPool = new UserPool(this, "UserPool", {
       signInAliases: {
         email: true,
         username: true,
@@ -62,6 +58,11 @@ export class InfrastructureStack extends Stack {
 
     const client = userPool.addClient("AppClient");
 
+    const queue = new Queue(this, "BuildStatusQueue", {
+      queueName: "BuildStatusQueue",
+      visibilityTimeout: Duration.seconds(60),
+    });
+
     new CfnOutput(this, "CloudFrontURL", {
       value: distribution.domainName,
       description: "The distribution URL",
@@ -76,10 +77,20 @@ export class InfrastructureStack extends Stack {
 
     new CfnOutput(this, "UserPoolId", {
       value: userPool.userPoolId,
+      description: "The user pool ID",
+      exportName: "UserPoolId",
     });
 
     new CfnOutput(this, "UserPoolClientId", {
       value: client.userPoolClientId,
+      description: "The user pool client ID",
+      exportName: "UserPoolClientId",
+    });
+
+    new CfnOutput(this, "BuildStatusQueueUrl", {
+      value: queue.queueUrl,
+      description: "The queue URL",
+      exportName: "BuildStatusQueueUrl",
     });
   }
 }

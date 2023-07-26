@@ -20,6 +20,9 @@ jobs:
       id-token: write
       contents: read
     steps:
+    - uses: actions/setup-node@v3
+      with:
+        node-version: 18
     - name: Print the 'pass' input
       run: echo "pass or fail? ${{ inputs.pass }}"
     - name: Configure AWS Credentials
@@ -28,5 +31,8 @@ jobs:
         aws-region: us-east-2
         role-to-assume: arn:aws:iam::108929348570:role/builder-dashboard-aws-playground-github-actions
         role-session-name: BuildDashboardGitHubActions
-    - name: AWS list regions
-      run: aws account list-regions
+    - name: Send build status
+      working-directory: queue
+      run: |
+        npm ci
+        node sendMessage ${{ inputs.pass }}
