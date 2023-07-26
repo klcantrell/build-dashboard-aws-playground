@@ -1,0 +1,20 @@
+name: Builder Dashboard Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      pass:
+        description: 'Whether this workflow should pass or fail'
+        required: true
+        type: choice
+        default: pass
+        options:
+          - pass
+          - fail
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Print the 'pass' input
+      run: echo "pass or fail? ${{ inputs.pass }}"
