@@ -20,20 +20,28 @@ jobs:
       id-token: write
       contents: read
     steps:
+    - name: Check 'pass' input
+      if: inputs.pass == 'fail'
+      run: exit 1
     - uses: actions/checkout@v3
     - uses: actions/setup-node@v3
       with:
         node-version: 18
-    - name: Print the 'pass' input
-      run: echo "pass or fail? ${{ inputs.pass }}"
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v2
       with:
         aws-region: us-east-2
         role-to-assume: arn:aws:iam::108929348570:role/builder-dashboard-aws-playground-github-actions
         role-session-name: BuildDashboardGitHubActions
-    - name: Send build status
+    - name: Send failure status
+      if: failure()
       working-directory: queue
       run: |
         npm ci
-        node sendMessage ${{ inputs.pass }}
+        node sendMessage fail
+    - name: Send success status
+      if: success()
+      working-directory: queue
+      run: |
+        npm ci
+        node sendMessage pass
