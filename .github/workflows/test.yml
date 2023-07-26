@@ -21,9 +21,6 @@ jobs:
       contents: read
     steps:
     - uses: actions/checkout@v3
-    - name: Check 'pass' input
-      if: inputs.pass == 'fail'
-      run: exit 1
     - uses: actions/setup-node@v3
       with:
         node-version: 18
@@ -33,6 +30,9 @@ jobs:
         aws-region: us-east-2
         role-to-assume: arn:aws:iam::108929348570:role/builder-dashboard-aws-playground-github-actions
         role-session-name: BuildDashboardGitHubActions
+    - name: Check 'pass' input
+      if: inputs.pass == 'fail'
+      run: exit 1
     - name: Send failure status
       if: failure()
       working-directory: queue
