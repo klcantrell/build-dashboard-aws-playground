@@ -81,7 +81,7 @@ export class BuildDashboardStack extends Stack {
       visibilityTimeout: Duration.seconds(60),
     });
     const topic = new sns.Topic(this, 'BuildStatusTopic', {
-      displayName: 'BuildStatusTopic',
+      displayName: 'Build status',
     });
 
     const notificationLambda = new lambda.Function(this, "BuildNotificationFunction", {
