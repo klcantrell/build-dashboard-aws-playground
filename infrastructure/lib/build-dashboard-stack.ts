@@ -17,6 +17,7 @@ import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as sqsEventSource from "aws-cdk-lib/aws-lambda-event-sources";
 import * as sns from "aws-cdk-lib/aws-sns";
+import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 
 export class BuildDashboardStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
@@ -47,6 +48,7 @@ export class BuildDashboardStack extends Stack {
         ],
       }
     );
+    const distributionUrl = `https://${distribution.distributionDomainName}`;
 
     new s3Deployment.BucketDeployment(this, "BucketDeployment", {
       sources: [
@@ -80,29 +82,39 @@ export class BuildDashboardStack extends Stack {
       queueName: "BuildStatusQueue",
       visibilityTimeout: Duration.seconds(60),
     });
-    const topic = new sns.Topic(this, 'BuildStatusTopic', {
-      displayName: 'Build Status Notifications',
+    const buildStatusTopic = new sns.Topic(this, "BuildStatusTopic", {
+      displayName: "Build Status Notifications",
+    });
+    const buildStatusTable = new dynamodb.Table(this, "BuildStatusTable", {
+      partitionKey: { name: "timestamp", type: dynamodb.AttributeType.NUMBER },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
     });
 
-    const notificationLambda = new lambda.Function(this, "BuildNotificationFunction", {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      handler: "index.handler",
-      code: lambda.Code.fromAsset(
-        path.join(__dirname, "lambda/notification")
-      ),
-      environment: {
-        SNS_TOPIC_ARN: topic.topicArn,
-        CLOUDFRONT_URL: distribution.domainName,
-      },
-    });
+    const notificationLambda = new lambda.Function(
+      this,
+      "BuildNotificationFunction",
+      {
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: "index.handler",
+        code: lambda.Code.fromAsset(
+          path.join(__dirname, "lambda/notification")
+        ),
+        environment: {
+          SNS_TOPIC_ARN: buildStatusTopic.topicArn,
+          CLOUDFRONT_URL: distributionUrl,
+          BUILD_STATUS_TABLE_NAME: buildStatusTable.tableName,
+        },
+      }
+    );
 
     notificationLambda.addEventSource(
       new sqsEventSource.SqsEventSource(queue, { batchSize: 10 })
     );
-    topic.grantPublish(notificationLambda);
+    buildStatusTopic.grantPublish(notificationLambda);
+    buildStatusTable.grantFullAccess(notificationLambda);
 
     new CfnOutput(this, "CloudFrontURL", {
-      value: distribution.domainName,
+      value: distributionUrl,
       description: "The distribution URL",
       exportName: "CloudfrontURL",
     });
@@ -138,9 +150,15 @@ export class BuildDashboardStack extends Stack {
     });
 
     new CfnOutput(this, "BuildStatusTopicArn", {
-      value: topic.topicArn,
+      value: buildStatusTopic.topicArn,
       description: "The arn of the notification topic",
       exportName: "BuildStatusTopicArn",
+    });
+
+    new CfnOutput(this, "BuildStatusTableName", {
+      value: buildStatusTable.tableArn,
+      description: "The build status table name",
+      exportName: "BuildStatusTableName",
     });
   }
 }
