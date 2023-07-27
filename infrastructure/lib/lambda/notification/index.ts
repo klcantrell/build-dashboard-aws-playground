@@ -45,7 +45,7 @@ const handler: Handler<SQSEvent, SQSBatchResponse> = async (event) => {
         Subject: "Build Status",
         Message: `${message.status.toUpperCase()} at ${formatter.format(
           new Date(message.timestamp)
-        )}`,
+        )}. Check the dashboard at ${process.env.CLOUDFRONT_URL}`,
         TopicArn: process.env.SNS_TOPIC_ARN,
       });
       const result = await snsClient.send(publishCommand);

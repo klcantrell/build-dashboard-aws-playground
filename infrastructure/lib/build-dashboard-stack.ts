@@ -92,6 +92,7 @@ export class BuildDashboardStack extends Stack {
       ),
       environment: {
         SNS_TOPIC_ARN: topic.topicArn,
+        CLOUDFRONT_URL: distribution.domainName,
       },
     });
 
