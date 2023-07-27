@@ -6,8 +6,6 @@ import {
 } from "aws-lambda";
 import { PublishCommand, SNSClient } from "@aws-sdk/client-sns";
 
-const SNS_TOPIC_ARN =
-  "arn:aws:sns:us-east-2:108929348570:BuildDashboardStack-BuildStatusTopic037A6D8C-UT3ZlpRyNawm";
 const snsClient = new SNSClient({ region: "us-east-2" });
 
 type EpochMilliseconds = number;
@@ -48,7 +46,7 @@ const handler: Handler<SQSEvent, SQSBatchResponse> = async (event) => {
         Message: `${message.status.toUpperCase()} at ${formatter.format(
           new Date(message.timestamp)
         )}`,
-        TopicArn: SNS_TOPIC_ARN,
+        TopicArn: process.env.SNS_TOPIC_ARN,
       });
       const result = await snsClient.send(publishCommand);
       console.log(

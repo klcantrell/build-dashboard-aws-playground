@@ -90,6 +90,9 @@ export class BuildDashboardStack extends Stack {
       code: lambda.Code.fromAsset(
         path.join(__dirname, "lambda/notification")
       ),
+      environment: {
+        SNS_TOPIC_ARN: topic.topicArn,
+      },
     });
 
     notificationLambda.addEventSource(
