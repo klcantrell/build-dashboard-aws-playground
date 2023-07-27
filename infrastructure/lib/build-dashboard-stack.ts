@@ -18,6 +18,7 @@ import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as sqsEventSource from "aws-cdk-lib/aws-lambda-event-sources";
 import * as sns from "aws-cdk-lib/aws-sns";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
+import * as apiGateway from "aws-cdk-lib/aws-apigateway";
 
 export class BuildDashboardStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
@@ -76,7 +77,7 @@ export class BuildDashboardStack extends Stack {
       selfSignUpEnabled: false,
     });
 
-    const client = userPool.addClient("AppClient");
+    const cognitoClient = userPool.addClient("AppClient");
 
     const queue = new sqs.Queue(this, "BuildStatusQueue", {
       queueName: "BuildStatusQueue",
@@ -113,6 +114,64 @@ export class BuildDashboardStack extends Stack {
     buildStatusTopic.grantPublish(notificationLambda);
     buildStatusTable.grantFullAccess(notificationLambda);
 
+    const authorizationLambda = new lambda.Function(
+      this,
+      "AuthorizationFunction",
+      {
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: "index.handler",
+        code: lambda.Code.fromAsset(
+          path.join(__dirname, "lambda/authorization")
+        ),
+        environment: {
+          COGNITO_USERPOOL_ID: userPool.userPoolId,
+          COGNITO_CLIENT_ID: cognitoClient.userPoolClientId,
+        },
+      }
+    );
+    const apiAuthorizer = new apiGateway.RequestAuthorizer(
+      this,
+      "BuildStatusApiAuthorizer",
+      {
+        handler: authorizationLambda,
+        // required key event if we want to disable caching
+        identitySources: [apiGateway.IdentitySource.header("Authorization")],
+        // disable caching
+        resultsCacheTtl: Duration.seconds(0),
+      }
+    );
+
+    const getBuildStatusLambda = new lambda.Function(
+      this,
+      "GetBuildStatusFunction",
+      {
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: "index.handler",
+        code: lambda.Code.fromAsset(
+          path.join(__dirname, "lambda/getBuildStatus")
+        ),
+        environment: {
+          BUILD_STATUS_TABLE_NAME: buildStatusTable.tableName,
+        },
+      }
+    );
+
+    const api = new apiGateway.RestApi(this, "BuildStatusApi", {
+      defaultCorsPreflightOptions: {
+        allowOrigins: apiGateway.Cors.ALL_ORIGINS,
+        allowMethods: apiGateway.Cors.ALL_METHODS,
+      },
+    });
+    const buildStatusResource = api.root.addResource("build-status");
+    buildStatusResource.addMethod(
+      "GET",
+      new apiGateway.LambdaIntegration(getBuildStatusLambda),
+      {
+        authorizer: apiAuthorizer,
+        authorizationType: apiGateway.AuthorizationType.CUSTOM,
+      }
+    );
+
     new CfnOutput(this, "CloudFrontURL", {
       value: distributionUrl,
       description: "The distribution URL",
@@ -138,7 +197,7 @@ export class BuildDashboardStack extends Stack {
     });
 
     new CfnOutput(this, "UserPoolClientId", {
-      value: client.userPoolClientId,
+      value: cognitoClient.userPoolClientId,
       description: "The user pool client ID",
       exportName: "UserPoolClientId",
     });
@@ -159,6 +218,12 @@ export class BuildDashboardStack extends Stack {
       value: buildStatusTable.tableArn,
       description: "The build status table name",
       exportName: "BuildStatusTableName",
+    });
+
+    new CfnOutput(this, "BuildStatusApiUrl", {
+      value: api.urlForPath("/build-status"),
+      description: "The build status API URL",
+      exportName: "BuildStatusApiUrl",
     });
   }
 }

@@ -76,7 +76,9 @@ const handler: Handler<SQSEvent, SQSBatchResponse> = async (event) => {
           ReturnConsumedCapacity: "TOTAL",
         });
         const dynamodbResult = await dynamodbClient.send(putItemCommand);
-        console.log(`saved to dynamodb ${dynamodbResult.ConsumedCapacity?.CapacityUnits}`);
+        console.log(
+          `saved to dynamodb ${dynamodbResult.ConsumedCapacity?.CapacityUnits}`
+        );
       } catch {
         console.log(`failed to save to dynamodb ${message.id}`);
         batchItemFailures.push({ itemIdentifier: message.id });
