@@ -1,9 +1,9 @@
 import { APIGatewayEvent, APIGatewayProxyResult, Handler } from "aws-lambda";
+import { DynamoDBClient, QueryCommand } from "@aws-sdk/client-dynamodb";
 import {
-  DynamoDBClient,
-  QueryCommand,
-} from "@aws-sdk/client-dynamodb";
-import { BuildStatusMessage } from "../../models";
+  BuildStatusMessage,
+  parseBuildStatusMessageFromDynamoDb,
+} from "../../common";
 
 const dynamodbClient = new DynamoDBClient({ region: "us-east-2" });
 
@@ -31,40 +31,9 @@ const handler: Handler<APIGatewayEvent, APIGatewayProxyResult> = async (
 
     const results = await dynamodbClient.send(queryCommand);
     const payload: BuildStatusMessage[] =
-      results.Items?.flatMap((item) => {
-        const id = item.id;
-        const status = item.status;
-        const timestamp = item.timestamp;
-        const type = item.type;
-
-        if (id == null || status == null || timestamp == null || type == null) {
-          return [];
-        }
-
-        if (
-          id.S == null ||
-          status.S == null ||
-          timestamp.N == null ||
-          type.S == null
-        ) {
-          return [];
-        }
-
-        if (type.S !== 'build-status') {
-          return [];
-        }
-
-        if (status.S !== 'pass' && status.S !== 'fail') {
-          return []
-        }
-
-        return {
-          id: id.S,
-          status: status.S,
-          timestamp: Number(timestamp.N),
-          type: type.S,
-        };
-      }) ?? [];
+      results.Items?.flatMap(
+        (item) => parseBuildStatusMessageFromDynamoDb(item) ?? []
+      ) ?? [];
 
     return {
       statusCode: 200,

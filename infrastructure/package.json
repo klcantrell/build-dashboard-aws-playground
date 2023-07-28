@@ -6,6 +6,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "build:b": "tsc -b",
     "watch": "tsc -w",
     "cdk": "cdk"
   },

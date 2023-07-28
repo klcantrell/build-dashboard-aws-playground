@@ -6,7 +6,7 @@ import {
 } from "aws-lambda";
 import { PublishCommand, SNSClient } from "@aws-sdk/client-sns";
 import { DynamoDBClient, PutItemCommand } from "@aws-sdk/client-dynamodb";
-import { BuildStatusMessage } from "../../models";
+import { BuildStatusMessage, parseBuildStatusMessageFromSqs } from "../../common";
 
 const snsClient = new SNSClient({ region: "us-east-2" });
 const dynamodbClient = new DynamoDBClient({ region: "us-east-2" });
@@ -17,8 +17,8 @@ const handler: Handler<SQSEvent, SQSBatchResponse> = async (event) => {
   const messages: (BuildStatusMessage | string)[] = event.Records.map(
     (record) => {
       try {
-        const parsedMessage = JSON.parse(record.body);
-        if (isBuildStatusMessage(parsedMessage)) {
+        const parsedMessage = parseBuildStatusMessageFromSqs(record.body);
+        if (parsedMessage) {
           return { ...parsedMessage, id: record.messageId };
         } else {
           return record.messageId;
@@ -76,7 +76,7 @@ const handler: Handler<SQSEvent, SQSBatchResponse> = async (event) => {
         });
         const dynamodbResult = await dynamodbClient.send(putItemCommand);
         console.log(
-          `saved to dynamodb ${dynamodbResult.ConsumedCapacity?.CapacityUnits}`
+          `saved to DynamoDB ${dynamodbResult.ConsumedCapacity?.CapacityUnits}`
         );
       } catch {
         console.log(`failed to save to dynamodb ${message.id}`);
@@ -87,27 +87,5 @@ const handler: Handler<SQSEvent, SQSBatchResponse> = async (event) => {
 
   return { batchItemFailures };
 };
-
-function isBuildStatusMessage(
-  parsedMessage: unknown
-): parsedMessage is BuildStatusMessage {
-  const parsedMessageAsType = parsedMessage as BuildStatusMessage;
-  if (!parsedMessageAsType) {
-    return false;
-  }
-
-  if (
-    parsedMessageAsType.status !== "pass" &&
-    parsedMessageAsType.status !== "fail"
-  ) {
-    return false;
-  }
-
-  if (typeof parsedMessageAsType.timestamp !== "number") {
-    return false;
-  }
-
-  return true;
-}
 
 exports.handler = handler;

@@ -26,7 +26,15 @@
     "esModuleInterop": true
   },
   "exclude": [
+    "lib/lambda/syncBuildStatusStatistics",
+    "lib/lambda/notification",
+    "lib/lambda/getBuildStatus",
     "node_modules",
     "cdk.out",
+  ],
+  "references": [
+    { "path": "./lib/lambda/syncBuildStatusStatistics" },
+    { "path": "./lib/lambda/notification" },
+    { "path": "./lib/lambda/getBuildStatus" }
   ]
 }

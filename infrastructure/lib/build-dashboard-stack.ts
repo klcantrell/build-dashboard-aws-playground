@@ -93,13 +93,17 @@ export class BuildDashboardStack extends Stack {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
     });
+    const buildStatusStatistics = new dynamodb.Table(this, "BuildStatusStatisticsTable", {
+      partitionKey: { name: "status", type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+    });
 
     const notificationLambda = new lambda.Function(
       this,
       "BuildNotificationFunction",
       {
         runtime: lambda.Runtime.NODEJS_18_X,
-        handler: "index.handler",
+        handler: "build/lambda/notification/index.handler",
         code: lambda.Code.fromAsset(
           path.join(__dirname, "lambda/notification")
         ),
@@ -148,7 +152,7 @@ export class BuildDashboardStack extends Stack {
       "GetBuildStatusFunction",
       {
         runtime: lambda.Runtime.NODEJS_18_X,
-        handler: "index.handler",
+        handler: "build/lambda/getBuildStatus/index.handler",
         code: lambda.Code.fromAsset(
           path.join(__dirname, "lambda/getBuildStatus")
         ),
@@ -157,18 +161,21 @@ export class BuildDashboardStack extends Stack {
         },
       }
     );
-    const syncBuildStatusAggregationLambda = new lambda.Function(
+    const syncBuildStatusStatisticsLambda = new lambda.Function(
       this,
-      "SyncBuildStatusAggregationFunction",
+      "SyncBuildStatusStatisticsFunction",
       {
         runtime: lambda.Runtime.NODEJS_18_X,
-        handler: "index.handler",
+        handler: "build/lambda/syncBuildStatusStatistics/index.handler",
         code: lambda.Code.fromAsset(
-          path.join(__dirname, "lambda/syncBuildStatusAggregation")
+          path.join(__dirname, "lambda/syncBuildStatusStatistics")
         ),
+        environment: {
+          BUILD_STATUS_STATISTICS_TABLE_NAME: buildStatusStatistics.tableName,
+        },
       }
     );
-    syncBuildStatusAggregationLambda.addEventSource(
+    syncBuildStatusStatisticsLambda.addEventSource(
       new lambdaEventSources.DynamoEventSource(buildStatusTable, {
         startingPosition: lambda.StartingPosition.LATEST,
       })
@@ -176,6 +183,7 @@ export class BuildDashboardStack extends Stack {
 
     buildStatusTable.grantFullAccess(notificationLambda);
     buildStatusTable.grantReadData(getBuildStatusLambda);
+    buildStatusStatistics.grantFullAccess(syncBuildStatusStatisticsLambda);
 
     const api = new apiGateway.RestApi(this, "BuildStatusApi", {
       defaultCorsPreflightOptions: {
