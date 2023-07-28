@@ -19,6 +19,7 @@ import * as sqsEventSource from "aws-cdk-lib/aws-lambda-event-sources";
 import * as sns from "aws-cdk-lib/aws-sns";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as apiGateway from "aws-cdk-lib/aws-apigateway";
+import * as lambdaEventSources from "aws-cdk-lib/aws-lambda-event-sources";
 
 export class BuildDashboardStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
@@ -90,6 +91,7 @@ export class BuildDashboardStack extends Stack {
       partitionKey: { name: "type", type: dynamodb.AttributeType.STRING },
       sortKey: { name: "timestamp", type: dynamodb.AttributeType.NUMBER },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
     });
 
     const notificationLambda = new lambda.Function(
@@ -154,6 +156,22 @@ export class BuildDashboardStack extends Stack {
           BUILD_STATUS_TABLE_NAME: buildStatusTable.tableName,
         },
       }
+    );
+    const syncBuildStatusAggregationLambda = new lambda.Function(
+      this,
+      "SyncBuildStatusAggregationFunction",
+      {
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: "index.handler",
+        code: lambda.Code.fromAsset(
+          path.join(__dirname, "lambda/syncBuildStatusAggregation")
+        ),
+      }
+    );
+    syncBuildStatusAggregationLambda.addEventSource(
+      new lambdaEventSources.DynamoEventSource(buildStatusTable, {
+        startingPosition: lambda.StartingPosition.LATEST,
+      })
     );
 
     buildStatusTable.grantFullAccess(notificationLambda);

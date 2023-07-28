@@ -1,5 +1,9 @@
 # Welcome to your CDK TypeScript project
 
+## Notes
+
+The Lambda functions are written in TypeScript and need to be compiled with `tsc` before deploying.
+
 This is a blank project for CDK development with TypeScript.
 
 The `cdk.json` file tells the CDK Toolkit how to execute your app.
