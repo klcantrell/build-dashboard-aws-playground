@@ -86,8 +86,9 @@ export class BuildDashboardStack extends Stack {
     const buildStatusTopic = new sns.Topic(this, "BuildStatusTopic", {
       displayName: "Build Status Notifications",
     });
-    const buildStatusTable = new dynamodb.Table(this, "BuildStatusTable", {
-      partitionKey: { name: "timestamp", type: dynamodb.AttributeType.NUMBER },
+    const buildStatusTable = new dynamodb.Table(this, "BuildStatusTable-rev2", {
+      partitionKey: { name: "type", type: dynamodb.AttributeType.STRING },
+      sortKey: { name: "timestamp", type: dynamodb.AttributeType.NUMBER },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
     });
 
@@ -112,7 +113,6 @@ export class BuildDashboardStack extends Stack {
       new sqsEventSource.SqsEventSource(queue, { batchSize: 10 })
     );
     buildStatusTopic.grantPublish(notificationLambda);
-    buildStatusTable.grantFullAccess(notificationLambda);
 
     const authorizationLambda = new lambda.Function(
       this,
@@ -155,6 +155,9 @@ export class BuildDashboardStack extends Stack {
         },
       }
     );
+
+    buildStatusTable.grantFullAccess(notificationLambda);
+    buildStatusTable.grantReadData(getBuildStatusLambda);
 
     const api = new apiGateway.RestApi(this, "BuildStatusApi", {
       defaultCorsPreflightOptions: {

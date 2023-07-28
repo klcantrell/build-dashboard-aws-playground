@@ -6,17 +6,10 @@ import {
 } from "aws-lambda";
 import { PublishCommand, SNSClient } from "@aws-sdk/client-sns";
 import { DynamoDBClient, PutItemCommand } from "@aws-sdk/client-dynamodb";
+import { BuildStatusMessage } from "../../models";
 
 const snsClient = new SNSClient({ region: "us-east-2" });
 const dynamodbClient = new DynamoDBClient({ region: "us-east-2" });
-
-type EpochMilliseconds = number;
-
-type BuildStatusMessage = {
-  id: string;
-  status: "pass" | "fail";
-  timestamp: EpochMilliseconds;
-};
 
 const handler: Handler<SQSEvent, SQSBatchResponse> = async (event) => {
   const batchItemFailures: SQSBatchItemFailure[] = [];
@@ -66,6 +59,12 @@ const handler: Handler<SQSEvent, SQSBatchResponse> = async (event) => {
         const putItemCommand = new PutItemCommand({
           TableName: process.env.BUILD_STATUS_TABLE_NAME,
           Item: {
+            id: {
+              S: message.id,
+            },
+            type: {
+              S: 'build-status',
+            },
             timestamp: {
               N: message.timestamp.toString(),
             },
