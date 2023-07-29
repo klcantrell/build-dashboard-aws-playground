@@ -93,10 +93,14 @@ export class BuildDashboardStack extends Stack {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
     });
-    const buildStatusStatistics = new dynamodb.Table(this, "BuildStatusStatisticsTable", {
-      partitionKey: { name: "status", type: dynamodb.AttributeType.STRING },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-    });
+    const buildStatusStatisticsTable = new dynamodb.Table(
+      this,
+      "BuildStatusStatisticsTable",
+      {
+        partitionKey: { name: "status", type: dynamodb.AttributeType.STRING },
+        billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      }
+    );
 
     const notificationLambda = new lambda.Function(
       this,
@@ -171,7 +175,8 @@ export class BuildDashboardStack extends Stack {
           path.join(__dirname, "lambda/syncBuildStatusStatistics")
         ),
         environment: {
-          BUILD_STATUS_STATISTICS_TABLE_NAME: buildStatusStatistics.tableName,
+          BUILD_STATUS_STATISTICS_TABLE_NAME:
+            buildStatusStatisticsTable.tableName,
         },
       }
     );
@@ -180,10 +185,26 @@ export class BuildDashboardStack extends Stack {
         startingPosition: lambda.StartingPosition.LATEST,
       })
     );
+    const getBuildStatusStatisticsLambda = new lambda.Function(
+      this,
+      "GetBuildStatusStatisticsFunction",
+      {
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: "build/lambda/getBuildStatusStatistics/index.handler",
+        code: lambda.Code.fromAsset(
+          path.join(__dirname, "lambda/getBuildStatusStatistics")
+        ),
+        environment: {
+          BUILD_STATUS_STATISTICS_TABLE_NAME:
+            buildStatusStatisticsTable.tableName,
+        },
+      }
+    );
 
     buildStatusTable.grantFullAccess(notificationLambda);
     buildStatusTable.grantReadData(getBuildStatusLambda);
-    buildStatusStatistics.grantFullAccess(syncBuildStatusStatisticsLambda);
+    buildStatusStatisticsTable.grantFullAccess(syncBuildStatusStatisticsLambda);
+    buildStatusStatisticsTable.grantReadData(getBuildStatusStatisticsLambda);
 
     const api = new apiGateway.RestApi(this, "BuildStatusApi", {
       defaultCorsPreflightOptions: {
@@ -191,10 +212,23 @@ export class BuildDashboardStack extends Stack {
         allowMethods: apiGateway.Cors.ALL_METHODS,
       },
     });
+
     const buildStatusResource = api.root.addResource("build-status");
     buildStatusResource.addMethod(
       "GET",
       new apiGateway.LambdaIntegration(getBuildStatusLambda),
+      {
+        authorizer: apiAuthorizer,
+        authorizationType: apiGateway.AuthorizationType.CUSTOM,
+      }
+    );
+
+    const buildStatusStatistics = api.root.addResource(
+      "build-status-statistics"
+    );
+    buildStatusStatistics.addMethod(
+      "GET",
+      new apiGateway.LambdaIntegration(getBuildStatusStatisticsLambda),
       {
         authorizer: apiAuthorizer,
         authorizationType: apiGateway.AuthorizationType.CUSTOM,
@@ -253,6 +287,12 @@ export class BuildDashboardStack extends Stack {
       value: api.urlForPath("/build-status"),
       description: "The build status API URL",
       exportName: "BuildStatusApiUrl",
+    });
+
+    new CfnOutput(this, "BuildStatusStatisticsApiUrl", {
+      value: api.urlForPath("/build-status-statistics"),
+      description: "The build status statistics API URL",
+      exportName: "BuildStatusStatisticsApiUrl",
     });
   }
 }

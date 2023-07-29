@@ -10,6 +10,11 @@ export type BuildStatusMessage = {
   timestamp: EpochMilliseconds;
 };
 
+export type BuildStatusStatistic = {
+  status: "pass" | "fail";
+  count: number;
+};
+
 export function parseBuildStatusMessageFromSqs(body: string): BuildStatusMessage | undefined {
   const parsed = JSON.parse(body);
   if (isSqsBuildStatusMessage(parsed)) {
@@ -20,6 +25,10 @@ export function parseBuildStatusMessageFromSqs(body: string): BuildStatusMessage
 }
 
 export function parseBuildStatusMessageFromDynamoDb(record: Record<string, AttributeValue | AttributeValueClass>): BuildStatusMessage | undefined {
+  if (!record) {
+    return undefined;
+  }
+
   const id = record.id;
   const status = record.status;
   const timestamp = record.timestamp;
