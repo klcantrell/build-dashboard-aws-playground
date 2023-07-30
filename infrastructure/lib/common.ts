@@ -10,9 +10,9 @@ export type BuildStatusMessage = {
   timestamp: EpochMilliseconds;
 };
 
-export type BuildStatusStatistic = {
-  status: "pass" | "fail";
-  count: number;
+export type BuildStatusStatistics = {
+  pass: number;
+  fail: number;
 };
 
 export function parseBuildStatusMessageFromSqs(body: string): BuildStatusMessage | undefined {

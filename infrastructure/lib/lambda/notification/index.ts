@@ -6,7 +6,10 @@ import {
 } from "aws-lambda";
 import { PublishCommand, SNSClient } from "@aws-sdk/client-sns";
 import { DynamoDBClient, PutItemCommand } from "@aws-sdk/client-dynamodb";
-import { BuildStatusMessage, parseBuildStatusMessageFromSqs } from "../../common";
+import {
+  BuildStatusMessage,
+  parseBuildStatusMessageFromSqs,
+} from "../../common";
 
 const snsClient = new SNSClient({ region: "us-east-2" });
 const dynamodbClient = new DynamoDBClient({ region: "us-east-2" });
@@ -34,28 +37,6 @@ const handler: Handler<SQSEvent, SQSBatchResponse> = async (event) => {
       console.log("received an unrecognized message format", message);
     } else {
       try {
-        const formatter = new Intl.DateTimeFormat("en-US", {
-          dateStyle: "long",
-          timeStyle: "long",
-        });
-        const publishCommand = new PublishCommand({
-          Subject: "Build Status",
-          Message: `${message.status.toUpperCase()} at ${formatter.format(
-            new Date(message.timestamp)
-          )}. Check the dashboard at ${process.env.CLOUDFRONT_URL}`,
-          TopicArn: process.env.SNS_TOPIC_ARN,
-        });
-        const snsResult = await snsClient.send(publishCommand);
-        console.log(
-          `processed SQS message ${snsResult.MessageId}`,
-          JSON.stringify(message, null, 2)
-        );
-      } catch {
-        console.log(`failed to process SQS message ${message.id}`);
-        batchItemFailures.push({ itemIdentifier: message.id });
-      }
-
-      try {
         const putItemCommand = new PutItemCommand({
           TableName: process.env.BUILD_STATUS_TABLE_NAME,
           Item: {
@@ -63,7 +44,7 @@ const handler: Handler<SQSEvent, SQSBatchResponse> = async (event) => {
               S: message.id,
             },
             type: {
-              S: 'build-status',
+              S: "build-status",
             },
             timestamp: {
               N: message.timestamp.toString(),
@@ -81,6 +62,30 @@ const handler: Handler<SQSEvent, SQSBatchResponse> = async (event) => {
       } catch {
         console.log(`failed to save to dynamodb ${message.id}`);
         batchItemFailures.push({ itemIdentifier: message.id });
+      }
+
+      if (message.status === "fail") {
+        try {
+          const formatter = new Intl.DateTimeFormat("en-US", {
+            dateStyle: "long",
+            timeStyle: "long",
+          });
+          const publishCommand = new PublishCommand({
+            Subject: "Build Status",
+            Message: `${message.status.toUpperCase()} at ${formatter.format(
+              new Date(message.timestamp)
+            )}. Check the dashboard at ${process.env.CLOUDFRONT_URL}`,
+            TopicArn: process.env.SNS_TOPIC_ARN,
+          });
+          const snsResult = await snsClient.send(publishCommand);
+          console.log(
+            `processed SQS message ${snsResult.MessageId}`,
+            JSON.stringify(message, null, 2)
+          );
+        } catch {
+          console.log(`failed to process SQS message ${message.id}`);
+          batchItemFailures.push({ itemIdentifier: message.id });
+        }
       }
     }
   }

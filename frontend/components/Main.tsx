@@ -1,30 +1,39 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import {
-  AuthenticationDetails,
-  CognitoUser,
-  CognitoUserPool,
-  CognitoUserSession,
-  IAuthenticationCallback,
-} from "amazon-cognito-identity-js";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+
+import Login from "@/components/Login";
+import { fetchBuildHistory, fetchBuildStatusStatistics } from "@/api";
 
 export default function Main() {
-  const [accessToken, setAccessToken] = useState<
+  const [userState, setUserState] = useState<
     | { type: "initial" }
-    | { type: "loading" }
-    | { type: "success"; value: string }
+    | { type: "signing-in" }
+    | { type: "signed-in"; token: string }
     | { type: "error" }
   >({ type: "initial" });
 
-  const data = useQuery({
-    queryKey: ["bananaPhone"],
-    queryFn: fetchBananaPhone,
+  const buildHistoryQuery = useQuery({
+    queryKey: ["build-history"],
+    queryFn: () =>
+      fetchBuildHistory(userState.type === "signed-in" ? userState.token : ""),
+    enabled: userState.type === "signed-in",
+  });
+
+  const buildStatusStatisticsQuery = useQuery({
+    queryKey: ["build-status-statistics"],
+    queryFn: () =>
+      fetchBuildStatusStatistics(
+        userState.type === "signed-in" ? userState.token : ""
+      ),
+    enabled: userState.type === "signed-in",
   });
 
   const loading =
-    data.isLoading || data.data == null || accessToken.type === "loading";
+    buildHistoryQuery.isInitialLoading ||
+    buildStatusStatisticsQuery.isInitialLoading ||
+    userState.type === "signing-in";
 
   return (
     <main className="flex min-h-screen flex-col items-center mt-12">
@@ -34,65 +43,81 @@ export default function Main() {
           <p>Loading...</p>
         ) : (
           <>
-            {(accessToken.type === "initial" ||
-              accessToken.type === "error") && (
-              <>
-                <h2 className="text-lg font-semibold mb-2">Login</h2>
-                <form
-                  className="flex flex-col gap-2"
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-
-                    setAccessToken({ type: "loading" });
-
-                    const formData = new FormData(e.currentTarget);
-                    try {
-                      const result = await signIn(
-                        formData.get("username")!.toString(),
-                        formData.get("password")!.toString()
-                      );
-                      setAccessToken({
-                        type: "success",
-                        value: result.getAccessToken().getJwtToken(),
-                      });
-                    } catch {
-                      setAccessToken({ type: "error" });
-                    }
-                  }}
-                >
-                  <label className="flex w-[300px] justify-between">
-                    <span className="text-">Username</span>{" "}
-                    <input
-                      className="text-gray-800"
-                      type="text"
-                      name="username"
-                      autoComplete="off"
-                      data-lpignore="true"
-                      required
-                    />
-                  </label>
-                  <label className="flex w-[300px] justify-between">
-                    <span>Password:</span>{" "}
-                    <input
-                      className="text-gray-800"
-                      type="password"
-                      name="password"
-                      autoComplete="off"
-                      data-lpignore="true"
-                      required
-                    />
-                  </label>
-                  <button className="border-gray-300 bg-gray-100 font-bold py-1 mt-2 text-gray-800">
-                    Login
-                  </button>
-                </form>
-              </>
+            {(userState.type === "initial" || userState.type === "error") && (
+              <Login
+                onLoading={() => {
+                  setUserState({ type: "signing-in" });
+                }}
+                onSuccess={(token) => {
+                  setUserState({ type: "signed-in", token: token });
+                }}
+                onError={() => {
+                  setUserState({ type: "error" });
+                }}
+              />
             )}
 
-            {accessToken.type === "success" && (
+            {userState.type === "signed-in" && (
               <>
-                <h2 className="text-lg font-semibold">Data</h2>
-                <p>{data.data}</p>
+                <h2 className="text-lg font-semibold mb-4 text-center">
+                  Build history (last 10)
+                </h2>
+                {buildHistoryQuery.data &&
+                  (buildHistoryQuery.data.length > 0 ? (
+                    <table className="mb-14">
+                      <thead>
+                        <tr>
+                          <th className="text-left">Status</th>
+                          <th className="text-left">Time</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {buildHistoryQuery.data.map((build) => {
+                          return (
+                            <tr key={build.id} className="w-full">
+                              <td className="text-left min-w-[100px]">
+                                {build.status}
+                              </td>
+                              <td className="text-left">
+                                {new Intl.DateTimeFormat(navigator.language, {
+                                  dateStyle: "short",
+                                  timeStyle: "short",
+                                }).format(new Date(build.timestamp))}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <p className="mb-14">No builds found</p>
+                  ))}
+
+                {buildStatusStatisticsQuery.data && (
+                  <>
+                    <h2 className="text-lg font-semibold mb-4 text-center">
+                      Build status statistics
+                    </h2>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th className="text-left min-w-[100px]">Passes</th>
+                          <td className="text-left">
+                            {buildStatusStatisticsQuery.data.pass}
+                          </td>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr className="w-full">
+                          <th className="text-left min-w-[100px]">Fails</th>
+                          <td className="text-left">
+                            {buildStatusStatisticsQuery.data.fail}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </>
+                )}
               </>
             )}
           </>
@@ -100,58 +125,4 @@ export default function Main() {
       </section>
     </main>
   );
-}
-
-const userPoolId = process.env.NEXT_PUBLIC_COGNITO_USERPOOL_ID;
-const clientId = process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID;
-
-const poolData = {
-  UserPoolId: `${userPoolId}`,
-  ClientId: `${clientId}`,
-};
-
-const userPool = new CognitoUserPool(poolData);
-
-function getCognitoUser(username: string) {
-  const userData = {
-    Username: username,
-    Pool: userPool,
-  };
-  const cognitoUser = new CognitoUser(userData);
-
-  return cognitoUser;
-}
-
-export async function signIn(
-  username: string,
-  password: string
-): Promise<CognitoUserSession> {
-  return new Promise<CognitoUserSession>(function (resolve, reject) {
-    const authenticationData = {
-      Username: username,
-      Password: password,
-    };
-    const authenticationDetails = new AuthenticationDetails(authenticationData);
-
-    const currentUser = getCognitoUser(username);
-
-    currentUser.authenticateUser(authenticationDetails, {
-      onSuccess(res: CognitoUserSession) {
-        resolve(res);
-      },
-      onFailure(error: unknown) {
-        reject(error);
-      },
-    });
-  }).catch((err) => {
-    throw err;
-  });
-}
-
-function fetchBananaPhone(): Promise<string> {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve("banana phone!");
-    }, 2000);
-  });
 }
